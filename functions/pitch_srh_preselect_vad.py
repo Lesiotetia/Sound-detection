@@ -1,15 +1,15 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Sat Mar 16 16:58:31 2019
-child of pitch_srh_nikos.m, 
-does not return SRHmat,
-use only for the needs of VAD
-@author: nstefana
-"""
 import numpy.matlib
 import numpy as np
 from scipy.signal import lfilter
 import librosa
+from numba import njit
+
+@njit(fastmath=True)
+def last_step_inv(segment, inv):
+    numerator=np.sum(np.power(segment,2))
+    denominator=np.sum(np.power(inv,2))
+    inv=inv*np.sqrt(numerator/denominator)
+    return inv
 
 def lpcresidual(x,L,shift,order):
     '''
@@ -24,32 +24,29 @@ def lpcresidual(x,L,shift,order):
         Returns:
                 res (1D array:  Residual (Inverse filtered) of the input signal 
     '''
-#    x=np.reshape(x,(x.size,1))
-    shift=int(np.round(shift))
-    order=int(np.round(order))
-    start=0
-    L=int(np.round(L))
-    stop=start+L
-    res=np.zeros((len(x),),dtype=float)
-    #LPCcoef=np.zeros((order+1,np.round(len(x)/shift)),dtype=float)
     
+    shift=int(np.round(shift))
+    LPCorder=int(np.round(order))
+    numframes = int(np.floor((len(x) - L) / shift))
+    L=int(np.round(L))
     win=np.hanning(L)
-#    win=np.reshape(win,(L,1))
-    while stop<x.size:
-        segment=x[start:stop]
-        segment=np.multiply(segment,win)
-#        print(segment)     
-#        A,e,k=lpc(segment,order) #<-------- lpc based on 
-        A=librosa.core.lpc(segment,order)
-        #LPCcoeff= not implemented 
-        inv=lfilter(A,1,segment)
-        numerator=np.sum(np.power(segment,2))
-        denominator=np.sum(np.power(inv,2))
-        inv=inv*np.sqrt(numerator/denominator)
-        res[start:stop]=res[start:stop]+inv
-        start=start+shift
-        stop=stop+shift
+
+    indices = np.tile(np.arange(0,L),(numframes,1)) + \
+        np.tile(np.arange(0,numframes * shift,shift),(L,1)).T
+    indices = np.array(indices, dtype=np.int32)
+    
+    frames = x[indices]
+    frames = frames*win
+    lpc_=lambda segment: librosa.core.lpc(segment,LPCorder)
+    inv_ = lambda segment: last_step_inv(segment, lfilter(lpc_(segment),1,segment))
+    inv = np.apply_along_axis(inv_, 1, frames)
+    #Needs further optimization - (maybe some kind of parallelization or vectorization)
+    res=np.zeros((len(x),),dtype=float)
+    for (idx, start) in enumerate(range(0, (numframes-1)*shift+1, shift)):
+        res[start:start+L] += inv[idx, :]
+
     return res
+
 
 
 
