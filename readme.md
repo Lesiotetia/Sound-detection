@@ -20,6 +20,7 @@ After installation, "anaconda prompt" will show up in the program list.
     ```
 ​    in order to install all required libraries.
 ​    This might take some time but it is important for this procedure to be completed successfully.
+
 -----
 ## Running the algorithm on your data
 The system should be ready to run by now. You can run the tool by calling "detect_chainsaw.py" function for the command line version or "detect_chainsaw_gui.py" for the GUI version.
